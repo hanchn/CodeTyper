@@ -39,10 +39,30 @@
       .CodeMirror-line {
         line-height: 1.6;
       }
+      /* 文件信息显示 */
+      #file-info {
+        color: #ccc;
+        margin-bottom: 10px;
+        font-size: 14px;
+        display: flex;
+        justify-content: space-between;
+      }
+      #current-file {
+        font-weight: bold;
+        color: #64b5f6;
+      }
+      #loop-status {
+        color: #4caf50;
+      }
     </style>
   </head>
 
   <body>
+    <!-- 新增文件信息显示 -->
+    <div id="file-info">
+      <div>当前文件: <span id="current-file">loading...</span></div>
+      <div id="loop-status"></div>
+    </div>
     <div id="editor"></div>
 
     <!-- 主库 -->
@@ -59,7 +79,8 @@
           fileName: params.get("code") || "example.js",
           fontSize: params.get("fontSize") || "16",
           speed: parseInt(params.get("speed") || "60", 10),
-          lineHeight: params.get("lineHeight") || "1.6", // ✅ 支持 lineHeight 参数
+          lineHeight: params.get("lineHeight") || "1.6",
+          loop: params.get("loop") === "true", // 新增循环模式参数
         };
       }
 
@@ -71,6 +92,8 @@
       let index = 0;
       let typingTimer;
       let editor;
+      let allFiles = []; // 存储所有代码文件
+      let currentFileIndex = 0; // 当前文件索引
 
       function getMode(fileName) {
         if (fileName.endsWith(".py")) return "python";
@@ -110,11 +133,28 @@
             Math.random() * (config.typingSpeedMax - config.typingSpeedMin) +
             config.typingSpeedMin;
           typingTimer = setTimeout(typeCode, delay);
+        } else {
+          // 打字完成，如果是循环模式，准备加载下一个文件
+          if (config.loop && allFiles.length > 1) {
+            setTimeout(() => {
+              loadNextFile();
+            }, 2000); // 等待2秒后加载下一个文件
+          }
         }
+      }
+
+      // 加载下一个文件
+      function loadNextFile() {
+        currentFileIndex = (currentFileIndex + 1) % allFiles.length;
+        config.fileName = allFiles[currentFileIndex];
+        loadCodeAndStart();
       }
 
       async function loadCodeAndStart() {
         try {
+          // 更新当前文件显示
+          document.getElementById("current-file").textContent = config.fileName;
+
           const res = await fetch(
             `${window.location.origin}/api/code?file=${config.fileName}`
           );
@@ -123,20 +163,74 @@
             content = "Hello World !";
           }
           index = 0;
-          createEditor();
+
+          // 如果编辑器已存在，清空内容；否则创建新编辑器
+          if (editor) {
+            editor.setValue("");
+            editor.setOption("mode", getMode(config.fileName));
+          } else {
+            createEditor();
+          }
+
           clearTimeout(typingTimer);
           setTimeout(typeCode, 500);
         } catch (err) {
           console.error("加载失败:", err);
           content = "Hello World !";
           index = 0;
-          createEditor();
+          if (editor) {
+            editor.setValue("");
+          } else {
+            createEditor();
+          }
           setTimeout(typeCode, 500);
         }
       }
 
+      // 获取所有代码文件
+      async function fetchAllFiles() {
+        try {
+          const res = await fetch(`${window.location.origin}/api/files`);
+          allFiles = await res.json();
+
+          // 如果有文件并且当前文件在列表中，设置正确的索引
+          if (allFiles.length > 0) {
+            const fileIndex = allFiles.indexOf(config.fileName);
+            currentFileIndex = fileIndex >= 0 ? fileIndex : 0;
+
+            // 如果指定的文件不在列表中，使用第一个文件
+            if (fileIndex < 0) {
+              config.fileName = allFiles[0];
+            }
+          }
+
+          // 更新循环状态显示
+          updateLoopStatus();
+
+          // 加载第一个文件
+          loadCodeAndStart();
+        } catch (err) {
+          console.error("获取文件列表失败:", err);
+          // 如果获取文件列表失败，仍然尝试加载当前文件
+          loadCodeAndStart();
+        }
+      }
+
+      // 更新循环状态显示
+      function updateLoopStatus() {
+        const loopStatusEl = document.getElementById("loop-status");
+        if (config.loop) {
+          loopStatusEl.textContent = `循环模式: 开启 (${currentFileIndex + 1}/${
+            allFiles.length
+          })`;
+        } else {
+          loopStatusEl.textContent = "循环模式: 关闭";
+        }
+      }
+
       document.addEventListener("DOMContentLoaded", () => {
-        loadCodeAndStart();
+        // 先获取所有文件，然后开始加载
+        fetchAllFiles();
       });
     </script>
   </body>

@@ -1,10 +1,11 @@
-const express = require('express'); const fs = require('fs'); const path =
-require('path'); const app = express(); const port = 3000; // 静态托管
-index.html app.use(express.static(__dirname)); // API接口：读取 /code/
-下的指定文件 app.get('/api/code', (req, res) => { const fileName =
-req.query.file; if (!fileName) { return res.status(400).send('Missing file
-parameter'); } const filePath = path.join(__dirname, 'code', fileName);
-fs.readFile(filePath, 'utf8', (err, data) => { if (err) { console.error(err);
-return res.status(404).send('File not found'); } res.send(data); }); });
-app.listen(port, () => { console.log(`Server is running at
-http://localhost:${port}`); });
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    测试1
+  </body>
+</html>

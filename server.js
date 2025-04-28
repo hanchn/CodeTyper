@@ -15,6 +15,24 @@ const __dirname = dirname(__filename);
 
 app.use(express.static(__dirname));
 
+// 新增API：获取所有代码文件列表
+app.get('/api/files', (req, res) => {
+  const codeDir = path.join(__dirname, 'code');
+  fs.readdir(codeDir, (err, files) => {
+    if (err) {
+      console.error('读取代码目录失败:', err);
+      return res.status(500).send('无法读取代码文件');
+    }
+    // 过滤掉非代码文件（如.bak, .tmp等）
+    const codeFiles = files.filter(file => 
+      !file.startsWith('.') && 
+      !file.endsWith('.bak') && 
+      !file.endsWith('.tmp')
+    );
+    res.json(codeFiles);
+  });
+});
+
 app.get('/api/code', (req, res) => {
   const fileName = req.query.file || 'example.js';
   const filePath = path.join(__dirname, 'code', fileName);
@@ -34,7 +52,7 @@ detect(DEFAULT_PORT).then(_port => {
   }
   app.listen(_port, async () => {
     const url = `http://localhost:${_port}`;
-    const fullUrl = `${url}/?code=example.js&fontSize=16&speed=60&loop=false`;
+    const fullUrl = `${url}/?code=example.js&fontSize=16&speed=60&lineHeight=1.6&loop=false`;
 
     console.log();
     console.log(chalk.cyan('✨ Server started successfully'));
