@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>模拟敲代码 - 动态读取文件版</title>
+
+    <!-- 引入 highlight.js -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+    <style>
+      body {
+        background-color: #1e1e1e;
+        margin: 0;
+        padding: 20px;
+        font-family: "Courier New", Courier, monospace;
+      }
+      #editorWrapper {
+        background-color: #1e1e1e;
+        border: 1px solid #333;
+        padding: 20px;
+        border-radius: 10px;
+        overflow: auto;
+        min-height: 90vh;
+        position: relative;
+      }
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: 16px;
+      }
+      code {
+        display: block;
+        font-family: inherit;
+      }
+      .caret {
+        display: inline-block;
+        width: 8px;
+        height: 18px;
+        background: #d4d4d4;
+        animation: blink 1s steps(2, start) infinite;
+        vertical-align: bottom;
+      }
+      @keyframes blink {
+        to {
+          visibility: hidden;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="editorWrapper">
+      <pre><code id="editor" class="language-javascript"></code></pre>
+    </div>
+
+    <script>
+      // ====== 配置 Start ======
+      const config = {
+        fileName: "example.js", // 读取 code/example.js
+        typingSpeedMin: 30, // ms
+        typingSpeedMax: 80, // ms
+        fontSize: "16px",
+        language: "javascript", // 高亮语言
+      };
+      // ====== 配置 End ======
+
+      const editor = document.getElementById("editor");
+      editor.parentNode.style.fontSize = config.fontSize;
+      editor.className = "language-" + config.language;
+
+      const caret = document.createElement("span");
+      caret.className = "caret";
+      editor.parentNode.appendChild(caret);
+
+      let currentText = "";
+      let codeContent = "";
+      let i = 0;
+
+      function updateCaretPosition() {
+        caret.scrollIntoView({ behavior: "smooth", block: "end" });
+      }
+
+      function typeCode() {
+        if (i < codeContent.length) {
+          currentText += codeContent[i] === " " ? " " : codeContent[i];
+          editor.textContent = currentText;
+          hljs.highlightElement(editor);
+          updateCaretPosition();
+          i++;
+          const delay =
+            Math.random() * (config.typingSpeedMax - config.typingSpeedMin) +
+            config.typingSpeedMin;
+          setTimeout(typeCode, delay);
+        } else {
+          caret.style.display = "none";
+        }
+      }
+
+      // 自动读取指定代码文件
+      fetch(`/api/code?file=${config.fileName}`)
+        .then((response) => response.text())
+        .then((data) => {
+          codeContent = data;
+          typeCode();
+        })
+        .catch((err) => {
+          console.error("读取代码文件失败:", err);
+        });
+    </script>
+  </body>
+</html>
