@@ -2,11 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>CodeMirror 打字模拟器 - 专业版</title>
+    <title>打字模拟器 - VSCode Darker版 + 行高调整</title>
 
     <link
       rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/@codemirror/theme-one-dark@6.2.0/theme-one-dark.min.css"
+      href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/theme/material-darker.css"
     />
 
     <style>
@@ -14,7 +18,6 @@
         margin: 0;
         padding: 20px;
         background: #1e1e1e;
-        color: #ccc;
         font-family: "Courier New", Courier, monospace;
       }
       #editor {
@@ -24,29 +27,39 @@
         border-radius: 8px;
         overflow: hidden;
       }
+      .CodeMirror {
+        height: 100%;
+        background: #1e1e1e;
+        color: #ccc;
+        font-size: 16px;
+        /* 新增默认行高 */
+        line-height: 1.6;
+      }
+      /* 更精确控制到每一行 */
+      .CodeMirror-line {
+        line-height: 1.6;
+      }
     </style>
   </head>
+
   <body>
     <div id="editor"></div>
 
-    <script type="module">
-      import {
-        EditorView,
-        basicSetup,
-      } from "https://cdn.jsdelivr.net/npm/@codemirror/basic-setup@6.6.2/dist/index.min.js";
-      import { EditorState } from "https://cdn.jsdelivr.net/npm/@codemirror/state@6.2.0/dist/index.min.js";
-      import { oneDark } from "https://cdn.jsdelivr.net/npm/@codemirror/theme-one-dark@6.2.0/dist/index.min.js";
-      import { javascript } from "https://cdn.jsdelivr.net/npm/@codemirror/lang-javascript@6.2.2/dist/index.min.js";
-      import { python } from "https://cdn.jsdelivr.net/npm/@codemirror/lang-python@6.2.1/dist/index.min.js";
-      import { html } from "https://cdn.jsdelivr.net/npm/@codemirror/lang-html@6.2.0/dist/index.min.js";
+    <!-- 主库 -->
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.js"></script>
+    <!-- 支持语言 -->
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/javascript/javascript.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/python/python.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/htmlmixed/htmlmixed.js"></script>
 
+    <script>
       function getQueryParams() {
         const params = new URLSearchParams(window.location.search);
         return {
           fileName: params.get("code") || "example.js",
           fontSize: params.get("fontSize") || "16",
-          speed: params.get("speed") || "60",
-          loop: params.get("loop") || "false",
+          speed: parseInt(params.get("speed") || "60", 10),
+          lineHeight: params.get("lineHeight") || "1.6", // ✅ 支持 lineHeight 参数
         };
       }
 
@@ -54,75 +67,72 @@
       config.typingSpeedMin = config.speed / 2;
       config.typingSpeedMax = config.speed;
 
-      let editor;
       let content = "";
       let index = 0;
       let typingTimer;
+      let editor;
 
-      function getLanguageExtension(fileName) {
-        if (fileName.endsWith(".py")) return python();
-        if (fileName.endsWith(".html")) return html();
-        return javascript();
+      function getMode(fileName) {
+        if (fileName.endsWith(".py")) return "python";
+        if (fileName.endsWith(".html")) return "htmlmixed";
+        return "javascript";
       }
 
-      function createEditor(languageExtension) {
-        if (editor) {
-          editor.destroy();
-        }
-        editor = new EditorView({
-          state: EditorState.create({
-            extensions: [
-              basicSetup,
-              oneDark,
-              languageExtension,
-              EditorView.editable.of(false),
-            ],
-          }),
-          parent: document.getElementById("editor"),
+      function createEditor() {
+        editor = CodeMirror(document.getElementById("editor"), {
+          value: "",
+          mode: getMode(config.fileName),
+          theme: "material-darker",
+          lineNumbers: true,
+          readOnly: true,
         });
-        editor.dom.style.fontSize = `${config.fontSize}px`;
+
+        // 设置字体大小
+        editor.getWrapperElement().style.fontSize = `${config.fontSize}px`;
+
+        // 设置行高
+        editor.getWrapperElement().style.lineHeight = config.lineHeight;
+        // 保险起见也处理内部每行
+        const style = document.createElement("style");
+        style.textContent = `.CodeMirror-line { line-height: ${config.lineHeight}; }`;
+        document.head.appendChild(style);
       }
 
       function typeCode() {
         if (index < content.length) {
-          editor.dispatch({
-            changes: { from: editor.state.doc.length, insert: content[index] },
-          });
+          const nextChar = content[index];
+          editor.replaceRange(
+            nextChar,
+            editor.posFromIndex(editor.getValue().length)
+          );
           index++;
           const delay =
             Math.random() * (config.typingSpeedMax - config.typingSpeedMin) +
             config.typingSpeedMin;
           typingTimer = setTimeout(typeCode, delay);
-        } else {
-          if (config.loop === "true") {
-            setTimeout(() => {
-              editor.dispatch({
-                changes: { from: 0, to: editor.state.doc.length, insert: "" },
-              });
-              index = 0;
-              typeCode();
-            }, 1000);
-          }
         }
       }
 
-      function loadCodeAndStart() {
-        fetch(`/api/code?file=${config.fileName}`)
-          .then((res) => res.text())
-          .then((data) => {
-            content = data;
-            index = 0;
-            createEditor(getLanguageExtension(config.fileName));
-            clearTimeout(typingTimer);
-            typeCode();
-          })
-          .catch((err) => {
-            console.error("加载失败:", err);
+      async function loadCodeAndStart() {
+        try {
+          const res = await fetch(
+            `${window.location.origin}/api/code?file=${config.fileName}`
+          );
+          content = await res.text();
+          if (!content) {
             content = "Hello World !";
-            index = 0;
-            createEditor(javascript());
-            typeCode();
-          });
+          }
+          index = 0;
+          createEditor();
+          clearTimeout(typingTimer);
+          setTimeout(typeCode, 500);
+        } catch (err) {
+          console.error("加载失败:", err);
+          content = "Hello World !";
+          index = 0;
+          createEditor();
+          setTimeout(typeCode, 500);
+        }
       }
 
       document.addEventListener("DOMContentLoaded", () => {

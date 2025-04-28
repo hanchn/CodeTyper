@@ -1,16 +1,20 @@
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const detect = require('detect-port');
-const chalk = require('chalk');
+import express from 'express';
+import fs from 'fs';
+import path from 'path';
+import detect from 'detect-port';
+import chalk from 'chalk';
+import open from 'open';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
 const app = express();
 const DEFAULT_PORT = 3000;
 
-const open = (...args) => import('open').then(module => module.default(...args));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 app.use(express.static(__dirname));
 
-// 读取 /code/ 文件夹
 app.get('/api/code', (req, res) => {
   const fileName = req.query.file || 'example.js';
   const filePath = path.join(__dirname, 'code', fileName);
@@ -24,14 +28,13 @@ app.get('/api/code', (req, res) => {
   });
 });
 
-// 检测端口并启动
 detect(DEFAULT_PORT).then(_port => {
   if (DEFAULT_PORT !== _port) {
     console.log(chalk.yellow(`⚠️ 端口 ${DEFAULT_PORT} 被占用，使用端口 ${_port}`));
   }
   app.listen(_port, async () => {
     const url = `http://localhost:${_port}`;
-    const fullUrl = `${url}/?code=example.js&fontSize=16&speed=60&loop=true`;
+    const fullUrl = `${url}/?code=example.js&fontSize=16&speed=60&loop=false`;
 
     console.log();
     console.log(chalk.cyan('✨ Server started successfully'));
