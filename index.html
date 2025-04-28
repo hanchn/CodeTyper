@@ -2,114 +2,132 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>模拟敲代码 - 动态读取文件版</title>
+    <title>CodeMirror 打字模拟器 - 专业版</title>
 
-    <!-- 引入 highlight.js -->
     <link
       rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"
+      href="https://cdn.jsdelivr.net/npm/@codemirror/theme-one-dark@6.2.0/theme-one-dark.min.css"
     />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 
     <style>
       body {
-        background-color: #1e1e1e;
         margin: 0;
         padding: 20px;
+        background: #1e1e1e;
+        color: #ccc;
         font-family: "Courier New", Courier, monospace;
       }
-      #editorWrapper {
-        background-color: #1e1e1e;
+      #editor {
+        width: 100%;
+        height: 90vh;
         border: 1px solid #333;
-        padding: 20px;
-        border-radius: 10px;
-        overflow: auto;
-        min-height: 90vh;
-        position: relative;
-      }
-      pre {
-        margin: 0;
-        white-space: pre-wrap;
-        word-break: break-word;
-        font-size: 16px;
-      }
-      code {
-        display: block;
-        font-family: inherit;
-      }
-      .caret {
-        display: inline-block;
-        width: 8px;
-        height: 18px;
-        background: #d4d4d4;
-        animation: blink 1s steps(2, start) infinite;
-        vertical-align: bottom;
-      }
-      @keyframes blink {
-        to {
-          visibility: hidden;
-        }
+        border-radius: 8px;
+        overflow: hidden;
       }
     </style>
   </head>
   <body>
-    <div id="editorWrapper">
-      <pre><code id="editor" class="language-javascript"></code></pre>
-    </div>
+    <div id="editor"></div>
 
-    <script>
-      // ====== 配置 Start ======
-      const config = {
-        fileName: "example.js", // 读取 code/example.js
-        typingSpeedMin: 30, // ms
-        typingSpeedMax: 80, // ms
-        fontSize: "16px",
-        language: "javascript", // 高亮语言
-      };
-      // ====== 配置 End ======
+    <script type="module">
+      import {
+        EditorView,
+        basicSetup,
+      } from "https://cdn.jsdelivr.net/npm/@codemirror/basic-setup@6.6.2/dist/index.min.js";
+      import { EditorState } from "https://cdn.jsdelivr.net/npm/@codemirror/state@6.2.0/dist/index.min.js";
+      import { oneDark } from "https://cdn.jsdelivr.net/npm/@codemirror/theme-one-dark@6.2.0/dist/index.min.js";
+      import { javascript } from "https://cdn.jsdelivr.net/npm/@codemirror/lang-javascript@6.2.2/dist/index.min.js";
+      import { python } from "https://cdn.jsdelivr.net/npm/@codemirror/lang-python@6.2.1/dist/index.min.js";
+      import { html } from "https://cdn.jsdelivr.net/npm/@codemirror/lang-html@6.2.0/dist/index.min.js";
 
-      const editor = document.getElementById("editor");
-      editor.parentNode.style.fontSize = config.fontSize;
-      editor.className = "language-" + config.language;
+      function getQueryParams() {
+        const params = new URLSearchParams(window.location.search);
+        return {
+          fileName: params.get("code") || "example.js",
+          fontSize: params.get("fontSize") || "16",
+          speed: params.get("speed") || "60",
+          loop: params.get("loop") || "false",
+        };
+      }
 
-      const caret = document.createElement("span");
-      caret.className = "caret";
-      editor.parentNode.appendChild(caret);
+      const config = getQueryParams();
+      config.typingSpeedMin = config.speed / 2;
+      config.typingSpeedMax = config.speed;
 
-      let currentText = "";
-      let codeContent = "";
-      let i = 0;
+      let editor;
+      let content = "";
+      let index = 0;
+      let typingTimer;
 
-      function updateCaretPosition() {
-        caret.scrollIntoView({ behavior: "smooth", block: "end" });
+      function getLanguageExtension(fileName) {
+        if (fileName.endsWith(".py")) return python();
+        if (fileName.endsWith(".html")) return html();
+        return javascript();
+      }
+
+      function createEditor(languageExtension) {
+        if (editor) {
+          editor.destroy();
+        }
+        editor = new EditorView({
+          state: EditorState.create({
+            extensions: [
+              basicSetup,
+              oneDark,
+              languageExtension,
+              EditorView.editable.of(false),
+            ],
+          }),
+          parent: document.getElementById("editor"),
+        });
+        editor.dom.style.fontSize = `${config.fontSize}px`;
       }
 
       function typeCode() {
-        if (i < codeContent.length) {
-          currentText += codeContent[i] === " " ? " " : codeContent[i];
-          editor.textContent = currentText;
-          hljs.highlightElement(editor);
-          updateCaretPosition();
-          i++;
+        if (index < content.length) {
+          editor.dispatch({
+            changes: { from: editor.state.doc.length, insert: content[index] },
+          });
+          index++;
           const delay =
             Math.random() * (config.typingSpeedMax - config.typingSpeedMin) +
             config.typingSpeedMin;
-          setTimeout(typeCode, delay);
+          typingTimer = setTimeout(typeCode, delay);
         } else {
-          caret.style.display = "none";
+          if (config.loop === "true") {
+            setTimeout(() => {
+              editor.dispatch({
+                changes: { from: 0, to: editor.state.doc.length, insert: "" },
+              });
+              index = 0;
+              typeCode();
+            }, 1000);
+          }
         }
       }
 
-      // 自动读取指定代码文件
-      fetch(`/api/code?file=${config.fileName}`)
-        .then((response) => response.text())
-        .then((data) => {
-          codeContent = data;
-          typeCode();
-        })
-        .catch((err) => {
-          console.error("读取代码文件失败:", err);
-        });
+      function loadCodeAndStart() {
+        fetch(`/api/code?file=${config.fileName}`)
+          .then((res) => res.text())
+          .then((data) => {
+            content = data;
+            index = 0;
+            createEditor(getLanguageExtension(config.fileName));
+            clearTimeout(typingTimer);
+            typeCode();
+          })
+          .catch((err) => {
+            console.error("加载失败:", err);
+            content = "Hello World !";
+            index = 0;
+            createEditor(javascript());
+            typeCode();
+          });
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        loadCodeAndStart();
+      });
     </script>
   </body>
 </html>
