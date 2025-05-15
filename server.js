@@ -61,28 +61,14 @@ app.get('/api/code', (req, res) => {
 
     const filePath = path.join(codeDir, fileToRead);
     
-    // 根据文件扩展名设置正确的Content-Type
-    const ext = path.extname(fileToRead).toLowerCase();
-    switch (ext) {
-      case '.html':
-        res.type('text/html');
-        break;
-      case '.css':
-        res.type('text/css');
-        break;
-      case '.js':
-        res.type('application/javascript');
-        break;
-      default:
-        res.type('text/plain');
-    }
-
     fs.readFile(filePath, 'utf8', (err, data) => {
       if (err) {
         console.error(`读取文件失败：${fileToRead}`, err);
         return res.status(500).send('读取文件失败');
       }
-      res.send(data);
+      
+      res.type('text/plain');  // 统一使用纯文本类型
+      res.send(data);  // 直接发送原始内容，不进行转义
     });
   });
 });
@@ -93,7 +79,18 @@ detect(DEFAULT_PORT).then(_port => {
   }
   app.listen(_port, async () => {
     const url = `http://localhost:${_port}`;
-    const fullUrl = `${url}/?code=example.js&fontSize=16&speed=60&lineHeight=1.6&loop=false`;
+    const codeDir = path.join(__dirname, 'code');
+    
+    // 读取code目录下的第一个文件
+    const files = fs.readdirSync(codeDir);
+    const validFiles = files.filter(file => 
+      !file.startsWith('.') && 
+      !file.endsWith('.bak') && 
+      !file.endsWith('.tmp')
+    );
+    
+    const defaultFile = validFiles[0] || 'example.js';
+    const fullUrl = `${url}/?code=${defaultFile}&fontSize=16&speed=60&lineHeight=1.6&loop=false`;
 
     console.log();
     console.log(chalk.cyan('✨ Server started successfully'));
