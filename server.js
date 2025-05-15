@@ -23,7 +23,7 @@ app.get('/api/files', (req, res) => {
       console.error('读取代码目录失败:', err);
       return res.status(500).send('无法读取代码文件');
     }
-    // 过滤掉非代码文件（如.bak, .tmp等）
+    // 只过滤掉隐藏文件和临时文件
     const codeFiles = files.filter(file => 
       !file.startsWith('.') && 
       !file.endsWith('.bak') && 
@@ -34,15 +34,56 @@ app.get('/api/files', (req, res) => {
 });
 
 app.get('/api/code', (req, res) => {
-  const fileName = req.query.file || 'example.js';
-  const filePath = path.join(__dirname, 'code', fileName);
+  const codeDir = path.join(__dirname, 'code');
+  const requestedFile = req.query.file;
 
-  fs.readFile(filePath, 'utf8', (err, data) => {
+  fs.readdir(codeDir, (err, files) => {
     if (err) {
-      console.warn(`⚠️ 文件未找到：${fileName}，返回默认内容`);
-      return res.send('Hello World !');
+      console.error('读取代码目录失败:', err);
+      return res.status(500).send('无法读取代码文件');
     }
-    res.send(data);
+
+    // 过滤有效文件
+    const validFiles = files.filter(file => 
+      !file.startsWith('.') && 
+      !file.endsWith('.bak') && 
+      !file.endsWith('.tmp')
+    );
+
+    // 如果没有指定文件或文件不存在，使用第一个有效文件
+    const fileToRead = requestedFile && validFiles.includes(requestedFile) 
+      ? requestedFile 
+      : validFiles[0];
+
+    if (!fileToRead) {
+      return res.status(404).send('目录中没有可用的文件');
+    }
+
+    const filePath = path.join(codeDir, fileToRead);
+    
+    // 根据文件扩展名设置正确的Content-Type
+    const ext = path.extname(fileToRead).toLowerCase();
+    switch (ext) {
+      case '.html':
+        res.type('text/html');
+        break;
+      case '.css':
+        res.type('text/css');
+        break;
+      case '.js':
+        res.type('application/javascript');
+        break;
+      default:
+        res.type('text/plain');
+    }
+
+    fs.readFile(filePath, 'utf8', (err, data) => {
+      if (err) {
+        console.error(`读取文件失败：${fileToRead}`, err);
+        return res.status(500).send('读取文件失败');
+      }
+      res.send(data);
+    });
   });
 });
 
